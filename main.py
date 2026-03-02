@@ -5,9 +5,13 @@ import uuid
 from datetime import datetime
 
 from .jobs import send_mail
-
+from .services import gen_af_id
 
 app = FastAPI()
+
+vdb = [
+
+]
 
 origins = [
     '*',
@@ -40,9 +44,20 @@ Method to handle the onboarding request body for new onboarding members
 """
 @app.post('/onboard')
 async def onboard(member: OnboardingPost, background_task: BackgroundTasks):
+    # mode.dump converts the pydatic data into json
     member = member.model_dump()
     member['Unique ID'] = uuid.uuid4()
     member['joining_date'] = datetime.now().date()
 
-    background_task.add_task(send_mail, email=member["email"])
+    member_af_id = gen_af_id(city=member['location'])
+
+    member['member_id'] = member_af_id
+
+    vdb.append(member)
+
+    background_task.add_task(send_mail, email=member["email"], member_af_id=member_af_id)
     return member
+
+@app.get('/members')
+def get_members():
+    return vdb

@@ -1,4 +1,3 @@
-from fastapi import BackgroundTasks
 from fastapi_mail import ConnectionConfig, FastMail, MessageSchema
 from pydantic import EmailStr
 
@@ -20,13 +19,14 @@ conf = ConnectionConfig(
 )
 
 
-async def send_mail(email: EmailStr):
+async def send_mail(email: EmailStr, member_af_id: str):
     message = MessageSchema(
         subject = "Welcome to anantya foundation",
         recipients=[email],
         body=
-        """
-            Successful onboarding to anatya foundation!
+        f"""
+            Successful onboarding to anatya foundation!\n
+            Your Unique ID for anantya foundation is {member_af_id}.
         """,
         subtype="plain"
     )
