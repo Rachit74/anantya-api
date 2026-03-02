@@ -12,14 +12,6 @@ from .db import members_collection
 
 app = FastAPI()
 
-@app.on_event("startup")
-async def startup_db():
-    # Create a unique index on email (ascending)
-    # This will only create it if it doesn't exist
-    await members_collection.create_index(
-        [("email", 1)],
-        unique=True
-    )
 
 origins = [
     '*',
@@ -39,7 +31,7 @@ class OnboardingPost(BaseModel):
     age: int
     gender: str
     location: str
-    phone_number: int
+    phone_number: str
     profession: str
     place_of_profession: str
     department: str
@@ -70,7 +62,7 @@ async def onboard(member: OnboardingPost, background_tasks: BackgroundTasks):
             detail="Email Already exists",
         )
 
-    background_tasks.add_task(email_job.send_mail, email=member["email"], member_af_id=member_af_id)
+    # background_tasks.add_task(email_job.send_mail, email=member["email"], member_af_id=member_af_id)
     return Response(status_code=status.HTTP_201_CREATED)
 
 @app.get('/members')

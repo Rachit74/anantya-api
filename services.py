@@ -1,7 +1,6 @@
 
 # Temporary list for testing
 id_list = [
-    'AF-DL-001',
 ]
 
 existing_ids = set(id_list)
