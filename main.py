@@ -1,11 +1,13 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, status, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 import uuid
-from datetime import datetime
+from datetime import datetime, date
+from bson import ObjectId
 
 from .jobs import email_job
 from .services import gen_af_id
+from .db import members_collection
 
 app = FastAPI()
 
@@ -46,18 +48,26 @@ Method to handle the onboarding request body for new onboarding members
 async def onboard(member: OnboardingPost, background_tasks: BackgroundTasks):
     # mode.dump converts the pydatic data into json
     member = member.model_dump()
-    member['Unique ID'] = uuid.uuid4()
-    member['joining_date'] = datetime.now().date()
+    member['Unique ID'] = str(uuid.uuid4())
+    member['joining_date'] = date.today().isoformat()
 
     member_af_id = gen_af_id(city=member['location'])
 
     member['member_id'] = member_af_id
 
-    vdb.append(member)
+    await members_collection.insert_one(member)
 
     background_tasks.add_task(email_job.send_mail, email=member["email"], member_af_id=member_af_id)
-    return member
+    return Response(status_code=status.HTTP_201_CREATED)
 
 @app.get('/members')
-def get_members():
-    return vdb
+async def get_members():
+    cursor = members_collection.find({})
+
+    members = await cursor.to_list(length=1000)
+
+    # Convert _id to string
+    for m in members:
+        m['_id'] = str(m['_id'])
+
+    return members
