@@ -8,4 +8,5 @@ dependencies = [
     "fastapi-mail>=1.6.2",
     "fastapi[standard]>=0.133.1",
     "python-dotenv>=1.2.1",
+    "resend>=2.23.0",
 ]

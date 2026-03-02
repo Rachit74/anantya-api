@@ -4,7 +4,7 @@ from pydantic import BaseModel, EmailStr
 import uuid
 from datetime import datetime
 
-from .jobs import send_mail
+from .jobs import email_job
 from .services import gen_af_id
 
 app = FastAPI()
@@ -43,7 +43,7 @@ class OnboardingPost(BaseModel):
 Method to handle the onboarding request body for new onboarding members
 """
 @app.post('/onboard')
-async def onboard(member: OnboardingPost, background_task: BackgroundTasks):
+async def onboard(member: OnboardingPost, background_tasks: BackgroundTasks):
     # mode.dump converts the pydatic data into json
     member = member.model_dump()
     member['Unique ID'] = uuid.uuid4()
@@ -55,7 +55,7 @@ async def onboard(member: OnboardingPost, background_task: BackgroundTasks):
 
     vdb.append(member)
 
-    background_task.add_task(send_mail, email=member["email"], member_af_id=member_af_id)
+    background_tasks.add_task(email_job.send_mail, email=member["email"], member_af_id=member_af_id)
     return member
 
 @app.get('/members')
