@@ -1,8 +1,10 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 import uuid
-from datetime import datetime, date, time, timedelta, timezone
+from datetime import datetime
+
+from .jobs import send_mail
 
 
 app = FastAPI()
@@ -20,7 +22,7 @@ app.add_middleware(
 )
 
 class OnboardingPost(BaseModel):
-    email: str
+    email: EmailStr
     fullname: str
     age: int
     gender: str
@@ -30,10 +32,17 @@ class OnboardingPost(BaseModel):
     place_of_profession: str
     department: str
     volunteered_before: str
+    acknowledgement: bool
 
+
+"""
+Method to handle the onboarding request body for new onboarding members
+"""
 @app.post('/onboard')
-def onboard(member: OnboardingPost):
+async def onboard(member: OnboardingPost, background_task: BackgroundTasks):
     member = member.model_dump()
     member['Unique ID'] = uuid.uuid4()
     member['joining_date'] = datetime.now().date()
+
+    background_task.add_task(send_mail, email=member["email"])
     return member
