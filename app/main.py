@@ -7,7 +7,7 @@ from datetime import datetime, date
 from pymongo.errors import DuplicateKeyError
 
 from .jobs import email_job
-from .services import gen_af_id
+from .services.services import gen_af_id
 from .db import members_collection
 
 app = FastAPI()
@@ -62,7 +62,7 @@ async def onboard(member: OnboardingPost, background_tasks: BackgroundTasks):
             detail="Email Already exists",
         )
 
-    # background_tasks.add_task(email_job.send_mail, email=member["email"], member_af_id=member_af_id)
+    background_tasks.add_task(email_job.send_mail, email=member["email"], member_af_id=member_af_id)
     return Response(status_code=status.HTTP_201_CREATED)
 
 @app.get('/members')
