@@ -1,12 +1,14 @@
-from motor.motor_asyncio import AsyncIOMotorClient
+import asyncpg
 import os
 from dotenv import load_dotenv
 
 load_dotenv()
 
-MONGO_URL = os.getenv('MONGO_URL')
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-client = AsyncIOMotorClient(MONGO_URL)
-
-database = client.anantya_foundation
-members_collection = database.members
+async def create_db_pool():
+    return await asyncpg.create_pool(
+        DATABASE_URL,
+        min_size=1,
+        max_size=10
+    )
