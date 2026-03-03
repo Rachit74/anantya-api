@@ -62,7 +62,7 @@ async def onboard(member: OnboardingPost, background_tasks: BackgroundTasks):
             detail="Email Already exists",
         )
 
-    background_tasks.add_task(email_job.send_mail, email=member["email"], member_af_id=member_af_id)
+    background_tasks.add_task(email_job.send_mail, member=member)
     return Response(status_code=status.HTTP_201_CREATED)
 
 @app.get('/members')

@@ -4,6 +4,3 @@
         - Valid Government id (required?)
         - Social Media Links
         - inactive review of membership
-
- - change the Unique Id field to uuid
- - remove Resend, switch back to SMPT
