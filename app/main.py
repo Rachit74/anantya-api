@@ -7,7 +7,7 @@ from datetime import datetime, date
 from pymongo.errors import DuplicateKeyError
 
 from .jobs import email_job
-from .services.services import gen_af_id
+from .services import id_generator
 from .db import members_collection
 
 app = FastAPI()
@@ -47,10 +47,10 @@ async def onboard(member: OnboardingPost, background_tasks: BackgroundTasks):
     # mode.dump converts the pydatic data into json
     member = member.model_dump()
     member['email'] = member['email'].lower()
-    member['Unique ID'] = str(uuid.uuid4())
+    member['uuid'] = str(uuid.uuid4())
     member['joining_date'] = date.today().isoformat()
 
-    member_af_id = gen_af_id(city=member['location'])
+    member_af_id = id_generator.generate_unique_id(city=member['location'])
 
     member['member_id'] = member_af_id
 

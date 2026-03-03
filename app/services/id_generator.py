@@ -1,3 +1,8 @@
+"""
+Handles unique id generation for members
+AF-CITY-001
+"""
+
 import json
 from pathlib import Path
 
@@ -19,11 +24,11 @@ def save_counters():
         json.dump(city_counter_map, f, indent=2)
 
 """
-gen_af_id -> generate anantya foundation id
+generate_unique_id -> generate anantya foundation id
 will generate unique id specific to anantya foundation
 will make sure no id dublication
 """
-def gen_af_id(city: str):
+def generate_unique_id(city: str):
     """
     city: str -> format is of type -> City, Localit or City
     we get city out of the proper input, eg:- Delhi
