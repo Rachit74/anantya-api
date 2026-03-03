@@ -1,6 +1,1 @@
- - change department from str type to list, give option boxes in form
- - add ask event field
- - add the following into onboard model/form ->
-        - Valid Government id (required?)
-        - Social Media Links
-        - inactive review of membership
+- update data in excel sheet
