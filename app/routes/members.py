@@ -20,26 +20,39 @@ async def onboard(member: OnboardingPost, background_tasks: BackgroundTasks, req
     member_data['uuid'] = str(uuid.uuid4())
     member_data['joining_date'] = date.today()
 
-    member_af_id = generate_unique_id(city=member_data['location'])
-
-    member_data['member_id'] = member_af_id
-
-    query = """
-    INSERT INTO members (
-        uuid, email, fullname, age, gender, location,
-        phone_number, profession, place_of_profession,
-        department, volunteered_before, acknowledgement,
-        member_id, joining_date
-    )
-    VALUES (
-        $1,$2,$3,$4,$5,$6,
-        $7,$8,$9,$10,$11,$12,
-        $13,$14
-    )
-    RETURNING id;
+    # check for dublicate email before id generation
+    email_check_query = """
+    SELECT email FROM members WHERE email = $1;
     """
 
     try:
+        async with request.app.state.pool.acquire() as connection:
+                existing = await connection.fetchval(email_check_query, member_data['email'])
+                if existing:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Email Already exists",
+                    )
+
+        member_af_id = generate_unique_id(city=member_data['location'])
+
+        member_data['member_id'] = member_af_id
+
+        query = """
+        INSERT INTO members (
+            uuid, email, fullname, age, gender, location,
+            phone_number, profession, place_of_profession,
+            department, volunteered_before, acknowledgement,
+            member_id, joining_date
+        )
+        VALUES (
+            $1,$2,$3,$4,$5,$6,
+            $7,$8,$9,$10,$11,$12,
+            $13,$14
+        )
+        RETURNING id;
+        """
+
         async with request.app.state.pool.acquire() as connection:
             result = await connection.fetchrow(
                 query,
