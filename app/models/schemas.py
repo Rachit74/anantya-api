@@ -1,5 +1,6 @@
 from pydantic import BaseModel, EmailStr, HttpUrl
 from typing import List
+from datetime import date
 
 class OnboardingPost(BaseModel):
     email: EmailStr
@@ -16,3 +17,4 @@ class OnboardingPost(BaseModel):
     can_attend_events: bool
     government_id_picture: HttpUrl
     member_picture: HttpUrl
+    dob: date

@@ -42,9 +42,9 @@ async def onboard(member: OnboardingPost, background_tasks: BackgroundTasks, req
                 phone_number, profession, place_of_profession,
                 department, volunteered_before, acknowledgement,
                 can_attend_events, member_id, joining_date,
-                government_id_picture, member_picture
+                government_id_picture, member_picture, dob
             )
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
             RETURNING id;
             """
 
@@ -66,7 +66,8 @@ async def onboard(member: OnboardingPost, background_tasks: BackgroundTasks, req
                 member_data["member_id"],                  # $14 (string)
                 member_data["joining_date"],               # $15 (date)
                 member_data["government_id_picture"],      # $16 (HttpUrl/string)
-                member_data["member_picture"]              # $17 (HttpUrl/string)
+                member_data["member_picture"],              # $17 (HttpUrl/string)
+                member_data["dob"],
             )
 
     except asyncpg.UniqueViolationError:
