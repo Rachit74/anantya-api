@@ -26,7 +26,7 @@ async def onboard(member: OnboardingPost, background_tasks: BackgroundTasks, req
         )
 
     member_data = member.model_dump()
-    member_data['email'] = member['email'].lower()
+    member_data['email'] = member_data['email'].lower()
     member_data['uuid'] = str(uuid.uuid4())
     member_data['joining_date'] = date.today()
     member_data['government_id_picture'] = str(member_data['government_id_picture'])
