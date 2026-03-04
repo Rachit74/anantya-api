@@ -2,10 +2,12 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, status, Request
 from datetime import date
 import uuid
 import asyncpg
+from email_validator import validate_email, EmailNotValidError
 
 from app.models.schemas import OnboardingPost
 from app.jobs.email_job import send_mail
 from app.services.id_generator import generate_unique_id
+from app.services.email_verifier import rapid_email_verifier
 
 router = APIRouter()
 
@@ -14,8 +16,17 @@ Method to handle the onboarding request body for new onboarding members
 """
 @router.post('/onboard')
 async def onboard(member: OnboardingPost, background_tasks: BackgroundTasks, request: Request):
+
+    # verified email result
+    result = await rapid_email_verifier(member.email.lower())
+    if result.get("status") not in ["VALID", "PROBABLY_VALID"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Please provide a valid email address!"
+        )
+
     member_data = member.model_dump()
-    member_data['email'] = member_data['email'].lower()
+    member_data['email'] = member['email'].lower()
     member_data['uuid'] = str(uuid.uuid4())
     member_data['joining_date'] = date.today()
     member_data['government_id_picture'] = str(member_data['government_id_picture'])

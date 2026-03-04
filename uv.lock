@@ -17,6 +17,7 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "asyncpg" },
+    { name = "email-validator" },
     { name = "fastapi", extra = ["standard"] },
     { name = "fastapi-mail" },
     { name = "motor" },
@@ -27,6 +28,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "asyncpg", specifier = ">=0.31.0" },
+    { name = "email-validator", specifier = ">=2.3.0" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.133.1" },
     { name = "fastapi-mail", specifier = ">=1.6.2" },
     { name = "motor", specifier = ">=3.7.1" },

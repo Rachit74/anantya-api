@@ -19,6 +19,7 @@ conf = ConnectionConfig(
 
 
 async def send_mail(member: dict):
+    
 
     html_body = f"""
     <!DOCTYPE html>

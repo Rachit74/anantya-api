@@ -1,1 +1,3 @@
 - update data in excel sheet
+- write dob checker
+- automate sending wp links
