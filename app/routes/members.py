@@ -5,7 +5,7 @@ import asyncpg
 from email_validator import validate_email, EmailNotValidError
 
 from app.models.schemas import OnboardingPost
-from app.jobs.email_job import send_mail
+from app.jobs.api_mails import sendgrid_email
 from app.services.id_generator import generate_unique_id
 from app.services.email_verifier import rapid_email_verifier
 
@@ -18,12 +18,12 @@ Method to handle the onboarding request body for new onboarding members
 async def onboard(member: OnboardingPost, background_tasks: BackgroundTasks, request: Request):
 
     # verified email result
-    result = await rapid_email_verifier(member.email.lower())
-    if result.get("status") not in ["VALID", "PROBABLY_VALID"]:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Please provide a valid email address!"
-        )
+    # result = await rapid_email_verifier(member.email.lower())
+    # if result.get("status") not in ["VALID", "PROBABLY_VALID"]:
+    #     raise HTTPException(
+    #         status_code=status.HTTP_400_BAD_REQUEST,
+    #         detail=f"Please provide a valid email address!"
+    #     )
 
     member_data = member.model_dump()
     member_data['email'] = member_data['email'].lower()
@@ -87,7 +87,7 @@ async def onboard(member: OnboardingPost, background_tasks: BackgroundTasks, req
             detail="Email Already exists",
         )
 
-    background_tasks.add_task(send_mail, member=member_data)
+    background_tasks.add_task(sendgrid_email, member=member_data)
     return {"id": result["id"], "member_id": member_data["member_id"]}
 
 @router.get('/members')
