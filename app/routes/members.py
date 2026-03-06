@@ -5,9 +5,9 @@ import asyncpg
 from email_validator import validate_email, EmailNotValidError
 
 from app.models.schemas import OnboardingPost
-from app.jobs.api_mails import sendgrid_email
+# from app.jobs.api_mails import sendgrid_email
 from app.services.id_generator import generate_unique_id
-from app.services.email_verifier import rapid_email_verifier
+# from app.services.email_verifier import rapid_email_verifier
 
 router = APIRouter()
 
@@ -87,7 +87,6 @@ async def onboard(member: OnboardingPost, background_tasks: BackgroundTasks, req
             detail="Email Already exists",
         )
 
-    background_tasks.add_task(sendgrid_email, member=member_data)
     return {"id": result["id"], "member_id": member_data["member_id"]}
 
 @router.get('/members')
