@@ -4,10 +4,10 @@ import uuid
 import asyncpg
 from email_validator import validate_email, EmailNotValidError
 
-from app.models.schemas import OnboardingPost
-# from app.jobs.api_mails import sendgrid_email
+from app.models.schemas import OnboardingPost, MemberResponse
+from typing import List
+
 from app.services.id_generator import generate_unique_id
-# from app.services.email_verifier import rapid_email_verifier
 
 router = APIRouter()
 
@@ -89,9 +89,8 @@ async def onboard(member: OnboardingPost, background_tasks: BackgroundTasks, req
 
     return {"id": result["id"], "member_id": member_data["member_id"]}
 
-@router.get('/members')
+@router.get('/members', response_model=List[MemberResponse])
 async def get_members(request: Request):
-
     query = "SELECT * FROM members ORDER BY id DESC;"
 
     async with request.app.state.pool.acquire() as connection:

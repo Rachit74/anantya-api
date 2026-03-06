@@ -18,3 +18,12 @@ class OnboardingPost(BaseModel):
     government_id_picture: HttpUrl
     member_picture: HttpUrl
     dob: date
+
+class MemberResponse(BaseModel):
+    email: EmailStr
+    fullname: str
+    location: str
+    member_id: str
+    email_sent: bool
+    # uuid (to be removed later)
+    uuid: str
