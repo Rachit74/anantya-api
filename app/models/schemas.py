@@ -20,10 +20,9 @@ class OnboardingPost(BaseModel):
     dob: date
 
 class MemberResponse(BaseModel):
+    uuid: str
     email: EmailStr
     fullname: str
     location: str
     member_id: str
     email_sent: bool
-    # uuid (to be removed later)
-    uuid: str

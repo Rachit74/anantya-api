@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Response, status
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -32,3 +32,7 @@ app.add_middleware(
 )
 
 app.include_router(members.router)
+
+@app.get('/')
+def home():
+    return Response('API UP', status_code=status.HTTP_200_OK)

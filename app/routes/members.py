@@ -2,7 +2,6 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, status, Request
 from datetime import date
 import uuid
 import asyncpg
-from email_validator import validate_email, EmailNotValidError
 
 from app.models.schemas import OnboardingPost, MemberResponse
 from typing import List
@@ -16,14 +15,6 @@ Method to handle the onboarding request body for new onboarding members
 """
 @router.post('/onboard')
 async def onboard(member: OnboardingPost, background_tasks: BackgroundTasks, request: Request):
-
-    # verified email result
-    # result = await rapid_email_verifier(member.email.lower())
-    # if result.get("status") not in ["VALID", "PROBABLY_VALID"]:
-    #     raise HTTPException(
-    #         status_code=status.HTTP_400_BAD_REQUEST,
-    #         detail=f"Please provide a valid email address!"
-    #     )
 
     member_data = member.model_dump()
     member_data['email'] = member_data['email'].lower()
@@ -56,7 +47,7 @@ async def onboard(member: OnboardingPost, background_tasks: BackgroundTasks, req
                 government_id_picture, member_picture, dob
             )
             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
-            RETURNING id;
+            RETURNING uuid;
             """
 
             result = await connection.fetchrow(
@@ -87,11 +78,11 @@ async def onboard(member: OnboardingPost, background_tasks: BackgroundTasks, req
             detail="Email Already exists",
         )
 
-    return {"id": result["id"], "member_id": member_data["member_id"]}
+    return {"uuid": result["uuid"], "member_id": member_data["member_id"]}
 
 @router.get('/members', response_model=List[MemberResponse])
 async def get_members(request: Request):
-    query = "SELECT * FROM members ORDER BY id DESC;"
+    query = "SELECT * FROM members;"
 
     async with request.app.state.pool.acquire() as connection:
         rows = await connection.fetch(query)
