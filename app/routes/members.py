@@ -18,6 +18,7 @@ from app.models.schemas import OnboardingPost, MemberResponse
 from typing import List
 
 from app.services.id_generator import generate_unique_id
+from app.jobs.sheets_job import insert_member_record
 
 router = APIRouter()
 
@@ -108,6 +109,7 @@ async def onboard(member: OnboardingPost, background_tasks: BackgroundTasks, req
             detail="Email Already exists",
         )
 
+    background_tasks.add_task(insert_member_record, member_data)
     return {"uuid": result["uuid"], "member_id": member_data["member_id"]}
 
 
