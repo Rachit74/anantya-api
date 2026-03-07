@@ -1,3 +1,17 @@
+"""
+SendGrid Email Module (API-based)
+
+This module handles sending welcome emails to newly onboarded members
+using SendGrid's HTTP API. This approach works on platforms that block
+SMTP ports (like Render free tier) since it uses HTTPS (port 443).
+
+Environment Variables:
+    SENDGRID_API_KEY: SendGrid API key for authentication
+
+The sender email must be verified in SendGrid as a single sender
+or through domain authentication.
+"""
+
 import os
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail, Email, To, Content

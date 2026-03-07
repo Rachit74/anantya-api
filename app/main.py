@@ -1,3 +1,16 @@
+"""
+Anantya Foundation API - Main Application Entry Point
+
+This module initializes the FastAPI application for the Anantya Foundation
+volunteer management system. It handles:
+- Database connection pool lifecycle management
+- CORS middleware configuration
+- API router registration
+
+The application manages member onboarding, unique ID generation,
+and welcome email communication for volunteers.
+"""
+
 from fastapi import FastAPI, Response, status
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,6 +21,21 @@ from app.routes import members
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """
+    Manage the application lifespan for database connection pool.
+
+    Creates a PostgreSQL connection pool on startup and ensures
+    proper cleanup on shutdown.
+
+    Args:
+        app: The FastAPI application instance
+
+    Yields:
+        None during application runtime
+
+    Raises:
+        Exception: If database connection fails during startup
+    """
     try:
         app.state.pool = await create_db_pool()
         print("DATABASE CONNECTED")
@@ -35,4 +63,10 @@ app.include_router(members.router)
 
 @app.get('/')
 def home():
+    """
+    Health check endpoint.
+
+    Returns:
+        Response: Plain text 'API UP' with 200 status code
+    """
     return Response('API UP', status_code=status.HTTP_200_OK)

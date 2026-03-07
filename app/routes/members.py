@@ -1,3 +1,14 @@
+"""
+Member Routes Module
+
+This module defines the API endpoints for member management in the
+Anantya Foundation volunteer system.
+
+Endpoints:
+    POST /onboard - Register a new member
+    GET /members - Retrieve all registered members
+"""
+
 from fastapi import APIRouter, BackgroundTasks, HTTPException, status, Request
 from datetime import date
 import uuid
@@ -10,11 +21,30 @@ from app.services.id_generator import generate_unique_id
 
 router = APIRouter()
 
-"""
-Method to handle the onboarding request body for new onboarding members
-"""
+
 @router.post('/onboard')
 async def onboard(member: OnboardingPost, background_tasks: BackgroundTasks, request: Request):
+    """
+    Register a new member (volunteer) with the Anantya Foundation.
+
+    This endpoint:
+    1. Validates and processes the onboarding data
+    2. Checks for duplicate email addresses
+    3. Generates a unique member ID based on location
+    4. Stores the member record in the database
+    5. Returns the new member's UUID and member ID
+
+    Args:
+        member: OnboardingPost model containing all member details
+        background_tasks: FastAPI background tasks (for email sending)
+        request: Request object containing app state with DB pool
+
+    Returns:
+        dict: Contains 'uuid' and 'member_id' of the newly created member
+
+    Raises:
+        HTTPException: 400 if email already exists in the database
+    """
 
     member_data = member.model_dump()
     member_data['email'] = member_data['email'].lower()
@@ -80,8 +110,22 @@ async def onboard(member: OnboardingPost, background_tasks: BackgroundTasks, req
 
     return {"uuid": result["uuid"], "member_id": member_data["member_id"]}
 
+
 @router.get('/members', response_model=List[MemberResponse])
 async def get_members(request: Request):
+    """
+    Retrieve all registered members.
+
+    Returns a list of all members currently in the database,
+    including their UUID, email, name, location, member ID,
+    and email status.
+
+    Args:
+        request: Request object containing app state with DB pool
+
+    Returns:
+        List[MemberResponse]: List of member records
+    """
     query = "SELECT * FROM members;"
 
     async with request.app.state.pool.acquire() as connection:

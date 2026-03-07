@@ -1,3 +1,17 @@
+"""
+Email Job Module (SMTP via FastAPI-Mail)
+
+This module handles sending welcome emails to newly onboarded members
+using SMTP through Gmail's mail server via FastAPI-Mail.
+
+Note: This implementation uses SMTP which may not work on platforms
+like Render free tier that block SMTP ports. Consider using the
+SendGrid-based implementation in api_mails.py for such deployments.
+
+Environment Variables:
+    MAIL_PASSWORD: Gmail app password for SMTP authentication
+"""
+
 from fastapi_mail import ConnectionConfig, FastMail, MessageSchema
 
 from dotenv import load_dotenv
@@ -19,6 +33,21 @@ conf = ConnectionConfig(
 
 
 async def send_mail(member: dict):
+    """
+    Send a welcome email to a newly registered member via SMTP.
+
+    Constructs and sends an HTML email with the member's volunteer ID
+    and onboarding guidelines.
+
+    Args:
+        member: Dictionary containing member data with keys:
+            - email: Member's email address
+            - fullname: Member's full name
+            - member_id: Generated Anantya Foundation ID (e.g., AF-DEL-001)
+
+    Raises:
+        Exception: If email sending fails due to connection or auth errors
+    """
     
 
     html_body = f"""

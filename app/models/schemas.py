@@ -1,8 +1,43 @@
+"""
+Pydantic Models for Request/Response Validation
+
+This module defines the data models used for validating and
+serializing API request bodies and responses.
+
+Models:
+    OnboardingPost: Request body for new member registration
+    MemberResponse: Response model for member data retrieval
+"""
+
 from pydantic import BaseModel, EmailStr, HttpUrl
 from typing import List
 from datetime import date
 
+
 class OnboardingPost(BaseModel):
+    """
+    Request model for new member onboarding.
+
+    Captures all required information for registering a new volunteer
+    with the Anantya Foundation.
+
+    Attributes:
+        email: Member's email address (validated format)
+        fullname: Member's full name
+        age: Member's age in years
+        gender: Member's gender
+        location: City/locality string (format: "City, Locality" or "City")
+        phone_number: Contact phone number
+        profession: Member's occupation
+        place_of_profession: Workplace or institution
+        department: List of departments member wants to join
+        volunteered_before: Previous volunteering experience
+        acknowledgement: Member's agreement to terms
+        can_attend_events: Availability for events
+        government_id_picture: URL to government ID image
+        member_picture: URL to member's photo
+        dob: Date of birth
+    """
     email: EmailStr
     fullname: str
     age: int
@@ -19,7 +54,22 @@ class OnboardingPost(BaseModel):
     member_picture: HttpUrl
     dob: date
 
+
 class MemberResponse(BaseModel):
+    """
+    Response model for member data.
+
+    Represents the subset of member information returned by the API
+    after onboarding or when listing members.
+
+    Attributes:
+        uuid: Unique identifier (UUID4 format)
+        email: Member's email address
+        fullname: Member's full name
+        location: City/locality string
+        member_id: Anantya Foundation ID (format: AF-CITY-XXX)
+        email_sent: Whether welcome email was successfully sent
+    """
     uuid: str
     email: EmailStr
     fullname: str
