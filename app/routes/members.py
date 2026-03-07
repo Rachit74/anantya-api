@@ -110,7 +110,8 @@ async def onboard(member: OnboardingPost, background_tasks: BackgroundTasks, req
         )
 
     background_tasks.add_task(insert_member_record, member_data)
-    return {"uuid": result["uuid"], "member_id": member_data["member_id"]}
+    # returning uuid, member_id (af specific) and fullname for nodemailer on frotnend
+    return {"uuid": result["uuid"], "member_id": member_data["member_id"], "fullname": member_data["fullname"]}
 
 
 @router.get('/members', response_model=List[MemberResponse])

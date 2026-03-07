@@ -66,6 +66,7 @@ def insert_member_record(member_data: dict[str, Any]):
             department = ", ".join(department)
 
         row_data = [
+            member_data.get("member_id", ""),
             member_data.get("fullname", ""),
             member_data.get("email", ""),
             member_data.get("location", ""),
@@ -76,7 +77,6 @@ def insert_member_record(member_data: dict[str, Any]):
             member_data.get("government_id_picture", ""),
             member_data.get("member_picture", ""),
             str(member_data.get("can_attend_events", "")),
-            member_data.get("member_id", ""),
         ]
 
         sheet.append_row(row_data)

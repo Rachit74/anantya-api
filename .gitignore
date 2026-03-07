@@ -13,3 +13,4 @@ wheels/
 # Data files
 city_counters.json
 gapi_creds.json
+af-firebase-key.json
