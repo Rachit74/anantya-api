@@ -4,11 +4,13 @@ Google Sheets Background Job
 Inserts member records into Google Sheets for record keeping.
 """
 
+import json
+import os
 import gspread
 from pathlib import Path
 from typing import Any
 
-# Path to service account credentials
+# Path to service account credentials (local development)
 CREDS_PATH = Path(__file__).parent.parent.parent / "gapi_creds.json"
 SPREADSHEET_NAME = "AF-API-SHEET"
 
@@ -17,10 +19,20 @@ def get_sheet_client() -> gspread.Client:
     """
     Authenticate and return a gspread client.
 
+    Reads credentials from environment variable (production) or file (local dev).
+
     Returns:
         gspread.Client: Authenticated client for Google Sheets API
     """
-    return gspread.service_account(filename=str(CREDS_PATH))
+    creds_json = os.getenv("GOOGLE_CREDENTIALS")
+
+    if creds_json:
+        # Production: load from environment variable
+        creds_dict = json.loads(creds_json)
+        return gspread.service_account_from_dict(creds_dict)
+    else:
+        # Local development: load from file
+        return gspread.service_account(filename=str(CREDS_PATH))
 
 
 def insert_member_record(member_data: dict[str, Any]):
