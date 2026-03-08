@@ -18,6 +18,7 @@ from app.models.schemas import OnboardingPost, MemberResponse
 from typing import List
 
 from app.services.id_generator import generate_unique_id
+from app.services.email_verifier import check_valid_email
 from app.jobs.sheets_job import insert_member_record
 
 router = APIRouter()
@@ -54,6 +55,12 @@ async def onboard(member: OnboardingPost, background_tasks: BackgroundTasks, req
     member_data['government_id_picture'] = str(member_data['government_id_picture'])
     member_data['member_picture'] = str(member_data['member_picture'])
 
+    # verfiy valid email
+    is_valid_email = check_valid_email(member_data["email"])
+
+    if not is_valid_email:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid Email")
+
     # Check for duplicate email
     email_check_query = "SELECT email FROM members WHERE email = $1;"
 
@@ -65,7 +72,7 @@ async def onboard(member: OnboardingPost, background_tasks: BackgroundTasks, req
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Email Already exists",
                 )
-
+            
             member_af_id = generate_unique_id(city=member_data['location'])
             member_data['member_id'] = member_af_id
 
