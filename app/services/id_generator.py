@@ -5,82 +5,95 @@ This module handles the generation of unique member IDs for the
 Anantya Foundation volunteer system.
 
 ID Format: AF-CITYCODE-XXX
-    - AF: Anantya Foundation prefix
-    - CITYCODE: 3-letter city code (e.g., DEL for Delhi)
-    - XXX: Sequential number (001, 002, etc.)
-
 Example: AF-DEL-001, AF-MUM-015
 
-The module maintains persistent counters per city to ensure
-uniqueness across application restarts.
+City counters are stored in Firestore to persist across deployments.
 """
 
 import json
+import os
 from pathlib import Path
+from dotenv import load_dotenv
 
-# Directory paths for data files
-BASE_DIR = Path(__file__).resolve().parents[1]   # app/
-DATA_DIR = BASE_DIR / "data"
+import firebase_admin
+from firebase_admin import credentials, firestore
 
+# load environment variables
+load_dotenv()
+
+# ----------------------------
+# Firebase / Firestore Setup
+# ----------------------------
+
+BASE_DIR = Path(__file__).resolve().parents[2]
+CREDS_PATH = BASE_DIR / "af-firebase-key.json"
+
+FIREBASE_CREDS = os.getenv("FIREBASE_CREDS")
+
+if FIREBASE_CREDS:
+    # Production: credentials from env variable
+    cred_dict = json.loads(FIREBASE_CREDS)
+    cred = credentials.Certificate(cred_dict)
+else:
+    # Local development: credentials from file
+    cred = credentials.Certificate(str(CREDS_PATH))
+
+if not firebase_admin._apps:
+    firebase_admin.initialize_app(cred)
+
+db = firestore.client()
+
+COUNTERS_COLLECTION = "city_counters"
+
+# ----------------------------
+# Local Data Files
+# ----------------------------
+
+DATA_DIR = BASE_DIR / "app/data"
 CITY_ALIASES_PATH = DATA_DIR / "city_aliases.json"
-CITY_COUNTERS_PATH = DATA_DIR / "city_counters.json"
 
-# Load city code mappings (city name -> 3-letter code)
 with CITY_ALIASES_PATH.open() as f:
     city_aliases_map = json.load(f)
 
-# Load persistent counters per city code
-with CITY_COUNTERS_PATH.open() as f:
-    city_counter_map = json.load(f)
-
-
-def save_counters():
-    """
-    Persist the current counter state to disk.
-
-    Writes the city_counter_map to city_counters.json to ensure
-    ID sequences are maintained across application restarts.
-    """
-    with CITY_COUNTERS_PATH.open("w") as f:
-        json.dump(city_counter_map, f, indent=2)
-
+# ----------------------------
+# ID Generator
+# ----------------------------
 
 def generate_unique_id(city: str):
     """
     Generate a unique Anantya Foundation member ID.
 
-    Parses the city from the location string, looks up the city code,
-    increments the counter for that city, and returns a formatted ID.
-
     Args:
-        city: Location string in format "City, Locality" or just "City"
-              Example: "Delhi, Connaught Place" or "Mumbai"
+        city: Location string like "Delhi, Connaught Place"
 
     Returns:
         str: Unique member ID in format "AF-CITYCODE-XXX"
-             Example: "AF-DEL-001"
-
-    Raises:
-        ValueError: If city input is empty or not a string
-
-    Note:
-        If the city is not found in the aliases map, 'XXX' is used
-        as the city code as a fallback.
     """
+
     if not city or not isinstance(city, str):
-            raise ValueError("Invalid city input")
+        raise ValueError("Invalid city input")
 
     city_name = city.split(",")[0].strip().lower()
+    city_code = city_aliases_map.get(city_name, "XXX")
 
-    city_code = city_aliases_map.get(city_name, 'XXX')
+    doc_ref = db.collection(COUNTERS_COLLECTION).document(city_code)
 
-    if city_code not in city_counter_map:
-        city_counter_map[city_code] = 0
+    @firestore.transactional
+    def increment_counter(transaction, doc_ref):
+        snapshot = doc_ref.get(transaction=transaction)
 
-    city_counter_map[city_code] += 1
-    new_id = f"AF-{city_code}-{city_counter_map[city_code]:03d}"
+        if snapshot.exists:
+            counter = snapshot.get("counter") + 1
+        else:
+            counter = 1
 
-    save_counters()
+        transaction.set(doc_ref, {"counter": counter}, merge=True)
+
+        return counter
+
+    transaction = db.transaction()
+    counter = increment_counter(transaction, doc_ref)
+
+    new_id = f"AF-{city_code}-{counter:03d}"
+
     return new_id
-
-
