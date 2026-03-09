@@ -14,7 +14,7 @@ from datetime import date
 import uuid
 import asyncpg
 
-from app.models.schemas import OnboardingPost, MemberResponse
+from app.models.schemas import OnboardingPost
 from typing import List
 
 from app.services.id_generator import generate_unique_id
@@ -122,7 +122,7 @@ async def onboard(member: OnboardingPost, background_tasks: BackgroundTasks, req
     return {"uuid": result["uuid"], "member_id": member_data["member_id"], "fullname": member_data["fullname"]}
 
 
-@router.get('/members', response_model=List[MemberResponse])
+@router.get('/members')
 async def get_members(request: Request, token_payload: dict = Depends(verify_token)):
     """
     Retrieve all registered members.

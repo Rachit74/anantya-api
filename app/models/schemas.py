@@ -55,28 +55,6 @@ class OnboardingPost(BaseModel):
     dob: date
 
 
-class MemberResponse(BaseModel):
-    """
-    Response model for member data.
-
-    Represents the subset of member information returned by the API
-    after onboarding or when listing members.
-
-    Attributes:
-        uuid: Unique identifier (UUID4 format)
-        email: Member's email address
-        fullname: Member's full name
-        location: City/locality string
-        member_id: Anantya Foundation ID (format: AF-CITY-XXX)
-        email_sent: Whether welcome email was successfully sent
-    """
-    uuid: str
-    email: EmailStr
-    fullname: str
-    location: str
-    member_id: str
-    # email_sent: bool
-    is_admin: bool
 
 class AdminSignup(BaseModel):
     member_id: str
