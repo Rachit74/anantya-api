@@ -83,3 +83,7 @@ class AdminSignup(BaseModel):
     password: str
     confirm_password: str
     admin_signup_key: str
+
+class AdminLogin(BaseModel):
+    member_id: str
+    password: str

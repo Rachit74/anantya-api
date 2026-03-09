@@ -1,9 +1,13 @@
 from fastapi import APIRouter, HTTPException, status, Request
-from app.models.schemas import AdminSignup
+from app.models.schemas import AdminSignup, AdminLogin
 import os
 import uuid
 import bcrypt
 from dotenv import load_dotenv
+
+from app.jwt_utils import create_access_token, verify_token
+from fastapi import Depends
+
 
 load_dotenv()
 
@@ -50,7 +54,7 @@ async def admin_signup(admin_data: AdminSignup, request: Request):
 
             s = bcrypt.gensalt()
             password_bytes = admin_data.password.encode('utf-8')
-            password_hash = str(bcrypt.hashpw(password_bytes, salt=s))
+            password_hash = bcrypt.hashpw(password_bytes, s).decode('utf-8')
 
             print(password_hash)
 
@@ -83,4 +87,28 @@ async def admin_signup(admin_data: AdminSignup, request: Request):
             status_code=500,
             detail=str(e)
         )
-    # return admin_data
+
+
+@router.post('/admin_login')
+async def admin_login(login_data: AdminLogin, request: Request):
+    async with request.app.state.pool.acquire() as connection:
+        admin = await connection.fetchrow(
+            "SELECT * FROM admins WHERE member_id = $1", login_data.member_id
+        )
+        if not admin:
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+
+        password_bytes = login_data.password.encode('utf-8')
+        stored_hash = admin["password_hash"].encode('utf-8')
+
+        if not bcrypt.checkpw(password_bytes, stored_hash):
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+
+        token = create_access_token(data={"sub": str(admin["admin_id"])})
+        return {"access_token": token, "token_type": "bearer"}
+
+
+# --- Example protected route ---
+@router.get('/admin/dashboard')
+async def admin_dashboard(token_payload: dict = Depends(verify_token)):
+    return {"message": "Welcome admin", "admin_id": token_payload["sub"]}
