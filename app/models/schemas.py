@@ -75,4 +75,11 @@ class MemberResponse(BaseModel):
     fullname: str
     location: str
     member_id: str
-    email_sent: bool
+    # email_sent: bool
+    is_admin: bool
+
+class AdminSignup(BaseModel):
+    member_id: str
+    password: str
+    confirm_password: str
+    admin_signup_key: str

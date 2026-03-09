@@ -16,7 +16,7 @@ from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.db import create_db_pool
-from app.routes import members
+from app.routes import members, auth
 
 
 @asynccontextmanager
@@ -60,6 +60,7 @@ app.add_middleware(
 )
 
 app.include_router(members.router)
+app.include_router(auth.router)
 
 @app.get('/')
 def home():
