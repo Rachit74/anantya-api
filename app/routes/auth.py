@@ -108,7 +108,6 @@ async def admin_login(login_data: AdminLogin, request: Request):
         return {"access_token": token, "token_type": "bearer"}
 
 
-# --- Example protected route ---
 @router.get('/admin/dashboard')
 async def admin_dashboard(token_payload: dict = Depends(verify_token)):
     return {"message": "Welcome admin", "admin_id": token_payload["sub"]}

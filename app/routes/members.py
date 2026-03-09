@@ -9,7 +9,7 @@ Endpoints:
     GET /members - Retrieve all registered members
 """
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, status, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, status, Request, Depends
 from datetime import date
 import uuid
 import asyncpg
@@ -20,6 +20,7 @@ from typing import List
 from app.services.id_generator import generate_unique_id
 from app.services.email_verifier import check_valid_email
 from app.jobs.sheets_job import insert_member_record
+from app.jwt_utils import verify_token
 
 router = APIRouter()
 
@@ -122,7 +123,7 @@ async def onboard(member: OnboardingPost, background_tasks: BackgroundTasks, req
 
 
 @router.get('/members', response_model=List[MemberResponse])
-async def get_members(request: Request):
+async def get_members(request: Request, token_payload: dict = Depends(verify_token)):
     """
     Retrieve all registered members.
 
