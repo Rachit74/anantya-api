@@ -12,7 +12,7 @@ from typing import Any
 
 # Path to service account credentials (local development)
 CREDS_PATH = Path(__file__).parent.parent.parent / "gapi_creds.json"
-SPREADSHEET_NAME = "AF-API-SHEET"
+SPREADSHEET_NAME = "Anantya Foundation Onboarded Members"
 
 
 def get_sheet_client() -> gspread.Client:
@@ -41,17 +41,18 @@ def insert_member_record(member_data: dict[str, Any]):
 
     Args:
         member_data: Dictionary containing member information with keys:
+            - member_id: AF member id
             - fullname: Member's full name
             - email: Member's email address
             - location: City/locality
             - phone_number: Contact phone number
+            - joining date: Onboarding date
             - profession: Member's occupation
             - place_of_profession: Workplace or institution
             - department: List of departments joined (will be joined as string)
             - government_id_picture: URL to government ID image
             - member_picture: URL to member's photo
             - can_attend_events: Availability for events (bool)
-            - member_id: AF member id
 
     Returns:
         bool: True if insertion successful, False otherwise
@@ -65,18 +66,25 @@ def insert_member_record(member_data: dict[str, Any]):
         if isinstance(department, list):
             department = ", ".join(department)
 
+        can_attend_events = member_data.get("can_attend_events", "")
+        if can_attend_events == True:
+            events = "Yes"
+        else:
+            events = "No"
+
         row_data = [
             member_data.get("member_id", ""),
             member_data.get("fullname", ""),
             member_data.get("email", ""),
             member_data.get("location", ""),
             member_data.get("phone_number", ""),
+            member_data.get("joining_date", "").isoformat(),
             member_data.get("profession", ""),
             member_data.get("place_of_profession", ""),
             department,
             member_data.get("government_id_picture", ""),
             member_data.get("member_picture", ""),
-            str(member_data.get("can_attend_events", "")),
+            events,
         ]
 
         sheet.append_row(row_data)
