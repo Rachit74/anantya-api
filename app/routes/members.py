@@ -21,11 +21,13 @@ from app.services.id_generator import generate_unique_id
 from app.services.email_verifier import check_valid_email
 from app.jobs.sheets_job import insert_member_record
 from app.jwt_utils import verify_token
+from app.limiter import limiter
 
 router = APIRouter()
 
 
 @router.post('/onboard')
+@limiter.limit("3/minute")
 async def onboard(member: OnboardingPost, background_tasks: BackgroundTasks, request: Request):
     """
     Register a new member (volunteer) with the Anantya Foundation.
