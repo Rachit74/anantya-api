@@ -91,6 +91,8 @@ async def admin_signup(admin_data: AdminSignup, request: Request):
 
 @router.post('/admin_login')
 async def admin_login(login_data: AdminLogin, request: Request):
+    # convert the id to upper case
+    login_data.member_id = login_data.member_id.upper()
     async with request.app.state.pool.acquire() as connection:
         admin = await connection.fetchrow(
             "SELECT * FROM admins WHERE member_id = $1", login_data.member_id
