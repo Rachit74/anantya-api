@@ -3,20 +3,17 @@ Admin Key Rotation Job
 
 - Fetches all admin emails from the database
 - Generates a new admin signup key
-- Updates the .env file with the new key
+- Updates the key in the database
 - Mails the new key to all admin users
 """
 
 from fastapi_mail import ConnectionConfig, FastMail, MessageSchema, MessageType
-from dotenv import load_dotenv, set_key
+from dotenv import load_dotenv
 import os
 import secrets
 import asyncpg
 
 load_dotenv()
-
-ENV_FILE_PATH = ".env"
-ADMIN_SINGUP_KEY = "ADMIN_SIGNUP_KEY"
 
 conf = ConnectionConfig(
     MAIL_USERNAME="rachithooda09@gmail.com",
@@ -30,53 +27,36 @@ conf = ConnectionConfig(
 )
 
 
-async def get_admin_mails() -> list[dict]:
+async def get_admin_mails(pool) -> list[dict]:
     """
-    Fetch all admin records (email + fullname) from the admins table.
-
-    Returns:
-        List of dicts with 'email' and 'fullname' keys.
+    Fetch all admin records (email + fullname) from the members table.
     """
-    db_url = os.getenv("DATABASE_URL")
-    conn = await asyncpg.connect(db_url)
-
-    try:
-        rows = await conn.fetch("SELECT email, fullname FROM members WHERE is_admin=TRUE;")
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("SELECT email, fullname FROM members WHERE is_admin = TRUE;")
         return [dict(row) for row in rows]
-    finally:
-        await conn.close()
 
 
 def gen_key() -> str:
     """
     Generate a cryptographically secure random signup key.
-
-    Returns:
-        A 32-character hex string.
     """
     return secrets.token_hex(8)
 
 
-def update_env_key(new_key: str) -> None:
+async def update_db_key(pool, new_key: str) -> None:
     """
-    Overwrite the ADMIN_SIGNUP_KEY value in the .env file.
-
-    Args:
-        new_key: The newly generated signup key.
+    Overwrite the ADMIN_SIGNUP_KEY value in the keys table.
     """
-    set_key(ENV_FILE_PATH, ADMIN_SINGUP_KEY, new_key)
-    # Also update the running process environment so the new key
-    # is immediately effective without a restart.
-    os.environ[ADMIN_SINGUP_KEY] = new_key
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE keys SET key_value = $1 WHERE key_name = 'ADMIN_SIGNUP_KEY';",
+            new_key
+        )
 
 
 async def send_mail(admins: list[dict], new_key: str) -> None:
     """
     Send the new admin signup key to every admin via email.
-
-    Args:
-        admins: List of dicts with 'email' and 'fullname'.
-        new_key: The newly generated signup key.
     """
     fm = FastMail(conf)
 
@@ -119,23 +99,22 @@ async def send_mail(admins: list[dict], new_key: str) -> None:
         await fm.send_message(message)
 
 
-async def rotate_admin_signup_key() -> None:
+async def rotate_admin_signup_key(pool) -> None:
     """
-    Full rotation pipeline. Call this as a FastAPI background task
+    Full rotation pipeline. Called as a FastAPI background task
     immediately after a successful admin signup.
 
     Steps:
         1. Pull all admin emails from the DB
         2. Generate a new signup key
-        3. Write the key to .env
+        3. Write the new key to the DB
         4. Email every admin the new key
     """
-    admins = await get_admin_mails()
+    admins = await get_admin_mails(pool)
 
     if not admins:
-        # Nothing to notify — skip rotation to avoid orphaned keys
         return
 
     new_key = gen_key()
-    update_env_key(new_key)
+    await update_db_key(pool, new_key)
     await send_mail(admins, new_key)

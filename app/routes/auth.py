@@ -1,46 +1,43 @@
 from fastapi import APIRouter, HTTPException, status, Request, BackgroundTasks
 from app.models.schemas import AdminSignup, AdminLogin
-import os
 import uuid
 import bcrypt
-from dotenv import load_dotenv
 
 from app.jwt_utils import create_access_token, verify_token
 from app.jobs.key_gen import rotate_admin_signup_key
 from fastapi import Depends
 
-
-load_dotenv()
-
 router = APIRouter()
-
-ADMIN_SIGNUP_KEY = os.getenv('ADMIN_SIGNUP_KEY')
 
 
 @router.post('/admin_signup')
 async def admin_signup(admin_data: AdminSignup, request: Request, background_tasks: BackgroundTasks):
+    admin_data.member_id = admin_data.member_id.upper()
 
-    # Validate signup key
-    if admin_data.admin_signup_key != ADMIN_SIGNUP_KEY:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Invalid Signup Key')
-
-    # rotate key
-    background_tasks.add_task(rotate_admin_signup_key)
-
-    # Validate password confirmation
+    # Validate password confirmation early, before any DB calls
     if admin_data.password != admin_data.confirm_password:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Passwords do not match')
-    
 
-    #check if a record for member_id exists
-    check_member_admin = """
-    SELECT * FROM members WHERE member_id = $1;
-    """
     try:
         async with request.app.state.pool.acquire() as connection:
-            # check if member exists
+
+            # Fetch signup key from DB
+            key_row = await connection.fetchrow(
+                "SELECT key_value FROM keys WHERE key_name = 'ADMIN_SIGNUP_KEY';"
+            )
+
+            if not key_row:
+                raise HTTPException(status_code=500, detail="Signup key not configured")
+
+            if admin_data.admin_signup_key != key_row["key_value"]:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Invalid Signup Key')
+
+            # Rotate key — pass pool so key_gen doesn't open its own connection
+            background_tasks.add_task(rotate_admin_signup_key, request.app.state.pool)
+
+            # Check if member exists
             member = await connection.fetchrow(
-                check_member_admin,
+                "SELECT * FROM members WHERE member_id = $1;",
                 admin_data.member_id
             )
 
@@ -57,16 +54,10 @@ async def admin_signup(admin_data: AdminSignup, request: Request, background_tas
                 )
 
             s = bcrypt.gensalt()
-            password_bytes = admin_data.password.encode('utf-8')
-            password_hash = bcrypt.hashpw(password_bytes, s).decode('utf-8')
-
+            password_hash = bcrypt.hashpw(admin_data.password.encode('utf-8'), s).decode('utf-8')
 
             await connection.execute(
-                """
-                UPDATE members
-                SET is_admin = TRUE
-                WHERE member_id = $1
-                """,
+                "UPDATE members SET is_admin = TRUE WHERE member_id = $1",
                 admin_data.member_id
             )
 
@@ -83,19 +74,16 @@ async def admin_signup(admin_data: AdminSignup, request: Request, background_tas
 
             return {"detail": "Admin signup successful", "admin_id": admin_id}
 
-                            
-
+    except HTTPException:
+        raise  # re-raise HTTP exceptions as-is, don't swallow them into a 500
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post('/admin_login')
 async def admin_login(login_data: AdminLogin, request: Request):
-    # convert the id to upper case
     login_data.member_id = login_data.member_id.upper()
+
     async with request.app.state.pool.acquire() as connection:
         admin = await connection.fetchrow(
             "SELECT * FROM admins WHERE member_id = $1", login_data.member_id
@@ -103,10 +91,7 @@ async def admin_login(login_data: AdminLogin, request: Request):
         if not admin:
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
-        password_bytes = login_data.password.encode('utf-8')
-        stored_hash = admin["password_hash"].encode('utf-8')
-
-        if not bcrypt.checkpw(password_bytes, stored_hash):
+        if not bcrypt.checkpw(login_data.password.encode('utf-8'), admin["password_hash"].encode('utf-8')):
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
         token = create_access_token(data={"sub": str(admin["admin_id"])})
