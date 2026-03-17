@@ -1,11 +1,10 @@
-from fastapi import APIRouter, HTTPException, status, Request, BackgroundTasks
+from fastapi import APIRouter, HTTPException, status, Request, BackgroundTasks, Depends
 from app.models.schemas import AdminSignup, AdminLogin
 import uuid
 import bcrypt
 
 from app.jwt_utils import create_access_token, verify_token
 from app.jobs.key_gen import rotate_admin_signup_key
-from fastapi import Depends
 
 router = APIRouter()
 
@@ -31,9 +30,6 @@ async def admin_signup(admin_data: AdminSignup, request: Request, background_tas
 
             if admin_data.admin_signup_key != key_row["key_value"]:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Invalid Signup Key')
-
-            # Rotate key — pass pool so key_gen doesn't open its own connection
-            background_tasks.add_task(rotate_admin_signup_key, request.app.state.pool)
 
             # Check if member exists
             member = await connection.fetchrow(
@@ -72,10 +68,12 @@ async def admin_signup(admin_data: AdminSignup, request: Request, background_tas
                 password_hash
             )
 
+            # All checks passed and INSERT succeeded — now safe to rotate the key
+            background_tasks.add_task(rotate_admin_signup_key, request.app.state.pool)
             return {"detail": "Admin signup successful", "admin_id": admin_id}
 
     except HTTPException:
-        raise  # re-raise HTTP exceptions as-is, don't swallow them into a 500
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

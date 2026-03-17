@@ -11,7 +11,7 @@ from fastapi_mail import ConnectionConfig, FastMail, MessageSchema, MessageType
 from dotenv import load_dotenv
 import os
 import secrets
-import asyncpg
+import string
 
 load_dotenv()
 
@@ -27,31 +27,16 @@ conf = ConnectionConfig(
 )
 
 
-async def get_admin_mails(pool) -> list[dict]:
+def gen_key(length: int = 16) -> str:
     """
-    Fetch all admin records (email + fullname) from the members table.
-    """
-    async with pool.acquire() as conn:
-        rows = await conn.fetch("SELECT email, fullname FROM members WHERE is_admin = TRUE;")
-        return [dict(row) for row in rows]
+    Generate a cryptographically secure alphanumeric signup key.
+    Combines uppercase letters, lowercase letters, and digits.
 
-
-def gen_key() -> str:
+    Returns:
+        A random alphanumeric string of the given length.
     """
-    Generate a cryptographically secure random signup key.
-    """
-    return secrets.token_hex(8)
-
-
-async def update_db_key(pool, new_key: str) -> None:
-    """
-    Overwrite the ADMIN_SIGNUP_KEY value in the keys table.
-    """
-    async with pool.acquire() as conn:
-        await conn.execute(
-            "UPDATE keys SET key_value = $1 WHERE key_name = 'ADMIN_SIGNUP_KEY';",
-            new_key
-        )
+    charset = string.ascii_uppercase + string.ascii_lowercase + string.digits
+    return ''.join(secrets.choice(charset) for _ in range(length))
 
 
 async def send_mail(admins: list[dict], new_key: str) -> None:
@@ -108,13 +93,20 @@ async def rotate_admin_signup_key(pool) -> None:
         1. Pull all admin emails from the DB
         2. Generate a new signup key
         3. Write the new key to the DB
-        4. Email every admin the new key
+        4. Release connection, then email every admin the new key
     """
-    admins = await get_admin_mails(pool)
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("SELECT email, fullname FROM members WHERE is_admin = TRUE;")
+        admins = [dict(row) for row in rows]
 
-    if not admins:
-        return
+        if not admins:
+            return
 
-    new_key = gen_key()
-    await update_db_key(pool, new_key)
+        new_key = gen_key()
+        await conn.execute(
+            "UPDATE keys SET key_value = $1 WHERE key_name = 'ADMIN_SIGNUP_KEY';",
+            new_key
+        )
+
+    # Connection released before sending emails
     await send_mail(admins, new_key)
