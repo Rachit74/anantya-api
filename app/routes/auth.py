@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, status, Request
+from fastapi import APIRouter, HTTPException, status, Request, BackgroundTasks
 from app.models.schemas import AdminSignup, AdminLogin
 import os
 import uuid
@@ -6,6 +6,7 @@ import bcrypt
 from dotenv import load_dotenv
 
 from app.jwt_utils import create_access_token, verify_token
+from app.jobs.key_gen import rotate_admin_signup_key
 from fastapi import Depends
 
 
@@ -13,15 +14,18 @@ load_dotenv()
 
 router = APIRouter()
 
-ADMIN_SIGNUP_KEY = os.getenv('ADMIN_SINGUP_KEY')
+ADMIN_SIGNUP_KEY = os.getenv('ADMIN_SIGNUP_KEY')
 
 
 @router.post('/admin_signup')
-async def admin_signup(admin_data: AdminSignup, request: Request):
+async def admin_signup(admin_data: AdminSignup, request: Request, background_tasks: BackgroundTasks):
 
     # Validate signup key
     if admin_data.admin_signup_key != ADMIN_SIGNUP_KEY:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Invalid Signup Key')
+
+    # rotate key
+    background_tasks.add_task(rotate_admin_signup_key)
 
     # Validate password confirmation
     if admin_data.password != admin_data.confirm_password:
@@ -56,7 +60,6 @@ async def admin_signup(admin_data: AdminSignup, request: Request):
             password_bytes = admin_data.password.encode('utf-8')
             password_hash = bcrypt.hashpw(password_bytes, s).decode('utf-8')
 
-            print(password_hash)
 
             await connection.execute(
                 """
