@@ -69,7 +69,7 @@ async def admin_signup(admin_data: AdminSignup, request: Request, background_tas
             )
 
             # All checks passed and INSERT succeeded — now safe to rotate the key
-            background_tasks.add_task(rotate_admin_signup_key, request.app.state.pool)
+            background_tasks.add_task(rotate_admin_signup_key, request.app.state.pool, admin_data)
             return {"detail": "Admin signup successful", "admin_id": admin_id}
 
     except HTTPException:
