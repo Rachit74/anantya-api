@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, status, Request, BackgroundTasks, 
 from app.models.schemas import AdminSignup, AdminLogin
 import uuid
 import bcrypt
+from datetime import datetime, timezone
 
 from app.jwt_utils import create_access_token, verify_token
 from app.jobs.key_gen import rotate_admin_signup_key
@@ -102,8 +103,8 @@ async def admin_dashboard(token_payload: dict = Depends(verify_token)):
     return {"message": "Welcome admin", "admin_id": token_payload["sub"]}
 
 
-@router.get('/password_reset_token')
-async def password_reset_token(member_email: str, request: Request, background_tasks: BackgroundTasks):
+@router.get('/reset_password')
+async def reset_password(member_email: str, request: Request, background_tasks: BackgroundTasks):
     member_email = member_email.lower()
     try:
         async with request.app.state.pool.acquire() as connection:
@@ -126,3 +127,24 @@ async def password_reset_token(member_email: str, request: Request, background_t
     
     except HTTPException:
         raise
+
+@router.get('/verify_reset_token')
+async def verify_reset_token(token: str, request: Request):
+    async with request.app.state.pool.acquire() as connection:
+        token_ = await connection.fetchrow("SELECT * FROM password_reset_tokens WHERE token = $1", token)
+
+    if token_ is None:
+        raise HTTPException(status_code=404, detail="Invalid token")
+    
+    token_data = dict(token_)
+    now = datetime.now(timezone.utc)
+
+    expires_at = token_data['expires_at']
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+    if now > expires_at:
+        raise HTTPException(status_code=400, detail="Token has expired")
+
+    return {"valid": True, "token": token_data['token']}
+
