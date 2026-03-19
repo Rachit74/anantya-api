@@ -1,10 +1,11 @@
-from fastapi import APIRouter, HTTPException, status, Request, BackgroundTasks, Depends
+from fastapi import APIRouter, HTTPException, status, Request, BackgroundTasks, Depends, Response
 from app.models.schemas import AdminSignup, AdminLogin
 import uuid
 import bcrypt
 
 from app.jwt_utils import create_access_token, verify_token
 from app.jobs.key_gen import rotate_admin_signup_key
+from app.jobs.password_reset_token import update_token
 
 router = APIRouter()
 
@@ -99,3 +100,29 @@ async def admin_login(login_data: AdminLogin, request: Request):
 @router.get('/admin/dashboard')
 async def admin_dashboard(token_payload: dict = Depends(verify_token)):
     return {"message": "Welcome admin", "admin_id": token_payload["sub"]}
+
+
+@router.get('/password_reset_token')
+async def password_reset_token(member_email: str, request: Request, background_tasks: BackgroundTasks):
+    member_email = member_email.lower()
+    try:
+        async with request.app.state.pool.acquire() as connection:
+            member = await connection.fetchrow("SELECT email, uuid, is_admin FROM members WHERE email = $1;", member_email)
+
+        if not member:
+            print("No Account Found with the email")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No Account Found for the email!")
+        
+        if member['is_admin'] == False:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This email is not registered as admin!")
+
+
+        # background task which will create a token and send it as an email
+        background_tasks.add_task(update_token, request.app.state.pool, dict(member))
+
+        return Response(content="You’ll receive an email with a link to reset your password.", status_code=status.HTTP_200_OK)
+    
+
+    
+    except HTTPException:
+        raise
