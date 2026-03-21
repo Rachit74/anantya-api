@@ -1,150 +1,120 @@
-from fastapi import APIRouter, HTTPException, status, Request, BackgroundTasks, Depends, Response
-from app.models.schemas import AdminSignup, AdminLogin
+from fastapi import APIRouter, HTTPException, status, BackgroundTasks, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
 import uuid
 import bcrypt
 from datetime import datetime, timezone
 
+from app.models.schemas import AdminSignup, AdminLogin
+from app.models.models import Admin, Member, Key
+from app.db import get_db
 from app.jwt_utils import create_access_token, verify_token
 from app.jobs.key_gen import rotate_admin_signup_key
-from app.jobs.password_reset_token import update_token
 
 router = APIRouter()
 
 
 @router.post('/admin_signup')
-async def admin_signup(admin_data: AdminSignup, request: Request, background_tasks: BackgroundTasks):
+async def admin_signup(
+    admin_data: AdminSignup,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db)
+):
     admin_data.member_id = admin_data.member_id.upper()
 
-    # Validate password confirmation early, before any DB calls
     if admin_data.password != admin_data.confirm_password:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Passwords do not match')
 
     try:
-        async with request.app.state.pool.acquire() as connection:
+        # Fetch signup key
+        key_result = await db.execute(
+            select(Key).where(Key.key_name == 'ADMIN_SIGNUP_KEY')
+        )
+        key_row = key_result.scalar_one_or_none()
 
-            # Fetch signup key from DB
-            key_row = await connection.fetchrow(
-                "SELECT key_value FROM keys WHERE key_name = 'ADMIN_SIGNUP_KEY';"
+        if not key_row:
+            raise HTTPException(status_code=500, detail="Signup key not configured")
+
+        if admin_data.admin_signup_key != key_row.key_value:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Invalid Signup Key')
+
+        # Check member exists
+        member_result = await db.execute(
+            select(Member).where(Member.member_id == admin_data.member_id)
+        )
+        member = member_result.scalar_one_or_none()
+
+        if not member:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid member_id. You must be a member first."
             )
 
-            if not key_row:
-                raise HTTPException(status_code=500, detail="Signup key not configured")
-
-            if admin_data.admin_signup_key != key_row["key_value"]:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Invalid Signup Key')
-
-            # Check if member exists
-            member = await connection.fetchrow(
-                "SELECT * FROM members WHERE member_id = $1;",
-                admin_data.member_id
+        if member.is_admin:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="You are already an admin!"
             )
 
-            if not member:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid member_id. You must be a member first."
-                )
+        # Hash password
+        password_hash = bcrypt.hashpw(
+            admin_data.password.encode('utf-8'),
+            bcrypt.gensalt()
+        ).decode('utf-8')
 
-            if member["is_admin"]:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="You are already an admin!"
-                )
+        # Promote member to admin
+        member.is_admin = True
 
-            s = bcrypt.gensalt()
-            password_hash = bcrypt.hashpw(admin_data.password.encode('utf-8'), s).decode('utf-8')
+        # Create admin record
+        new_admin = Admin(
+            admin_id=str(uuid.uuid4()),
+            member_id=admin_data.member_id,
+            password_hash=password_hash,
+            created_at=datetime.now(timezone.utc)
+        )
 
-            await connection.execute(
-                "UPDATE members SET is_admin = TRUE WHERE member_id = $1",
-                admin_data.member_id
-            )
+        db.add(new_admin)
+        await db.commit()
+        await db.refresh(new_admin)
 
-            admin_id = str(uuid.uuid4())
-            await connection.execute(
-                """
-                INSERT INTO admins(admin_id, member_id, password_hash, created_at)
-                VALUES ($1, $2, $3, NOW())
-                """,
-                admin_id,
-                admin_data.member_id,
-                password_hash
-            )
+        # Rotate key only after successful commit
+        background_tasks.add_task(rotate_admin_signup_key, db, admin_data)
 
-            # All checks passed and INSERT succeeded — now safe to rotate the key
-            background_tasks.add_task(rotate_admin_signup_key, request.app.state.pool, admin_data)
-            return {"detail": "Admin signup successful", "admin_id": admin_id}
+        return {"detail": "Admin signup successful", "admin_id": str(new_admin.admin_id)}
 
     except HTTPException:
         raise
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail="Admin already exists")
     except Exception as e:
+        await db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post('/admin_login')
-async def admin_login(login_data: AdminLogin, request: Request):
+async def admin_login(
+    login_data: AdminLogin,
+    db: AsyncSession = Depends(get_db)
+):
     login_data.member_id = login_data.member_id.upper()
 
-    async with request.app.state.pool.acquire() as connection:
-        admin = await connection.fetchrow(
-            "SELECT * FROM admins WHERE member_id = $1", login_data.member_id
-        )
-        if not admin:
-            raise HTTPException(status_code=401, detail="Invalid credentials")
+    result = await db.execute(
+        select(Admin).where(Admin.member_id == login_data.member_id)
+    )
+    admin = result.scalar_one_or_none()
 
-        if not bcrypt.checkpw(login_data.password.encode('utf-8'), admin["password_hash"].encode('utf-8')):
-            raise HTTPException(status_code=401, detail="Invalid credentials")
+    if not admin:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
 
-        token = create_access_token(data={"sub": str(admin["admin_id"])})
-        return {"access_token": token, "token_type": "bearer"}
+    if not bcrypt.checkpw(login_data.password.encode('utf-8'), admin.password_hash.encode('utf-8')):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    token = create_access_token(data={"sub": str(admin.admin_id)})
+    return {"access_token": token, "token_type": "bearer"}
 
 
 @router.get('/admin/dashboard')
 async def admin_dashboard(token_payload: dict = Depends(verify_token)):
     return {"message": "Welcome admin", "admin_id": token_payload["sub"]}
-
-
-@router.get('/reset_password')
-async def reset_password(member_email: str, request: Request, background_tasks: BackgroundTasks):
-    member_email = member_email.lower()
-    try:
-        async with request.app.state.pool.acquire() as connection:
-            member = await connection.fetchrow("SELECT email, uuid, is_admin FROM members WHERE email = $1;", member_email)
-
-        if not member:
-            print("No Account Found with the email")
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No Account Found for the email!")
-        
-        if member['is_admin'] == False:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This email is not registered as admin!")
-
-
-        # background task which will create a token and send it as an email
-        background_tasks.add_task(update_token, request.app.state.pool, dict(member))
-
-        return Response(content="You’ll receive an email with a link to reset your password.", status_code=status.HTTP_200_OK)
-    
-
-    
-    except HTTPException:
-        raise
-
-@router.get('/verify_reset_token')
-async def verify_reset_token(token: str, request: Request):
-    async with request.app.state.pool.acquire() as connection:
-        token_ = await connection.fetchrow("SELECT * FROM password_reset_tokens WHERE token = $1", token)
-
-    if token_ is None:
-        raise HTTPException(status_code=404, detail="Invalid token")
-    
-    token_data = dict(token_)
-    now = datetime.now(timezone.utc)
-
-    expires_at = token_data['expires_at']
-    if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
-
-    if now > expires_at:
-        raise HTTPException(status_code=400, detail="Token has expired")
-
-    return {"valid": True, "token": token_data['token']}
-

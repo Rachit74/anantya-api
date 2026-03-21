@@ -1,42 +1,34 @@
-"""
-Database Connection Module
-
-This module handles PostgreSQL database connection pool management
-using asyncpg for asynchronous database operations.
-
-The connection pool is configured with:
-- Minimum 1 connection (maintained even when idle)
-- Maximum 10 connections (limits resource usage)
-
-Environment Variables:
-    DATABASE_URL: PostgreSQL connection string (required)
-"""
-
-import asyncpg
 import os
 from dotenv import load_dotenv
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from sqlalchemy.orm import declarative_base
 
 load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
+# asyncpg requires postgresql+asyncpg:// scheme
+ASYNC_DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
 
-async def create_db_pool():
-    """
-    Create and return an asyncpg connection pool.
+engine = create_async_engine(
+    ASYNC_DATABASE_URL,
+    pool_size=10,          # your previous max_size=10
+    pool_pre_ping=True,    # handles Neon's auto-suspend/reconnect
+    connect_args={
+        "statement_cache_size": 0,  # your existing setting, kept
+        "ssl": "require"
+    }
+)
 
-    The pool manages connections to the PostgreSQL database,
-    allowing efficient reuse of connections across requests.
+AsyncSessionLocal = async_sessionmaker(
+    bind=engine,
+    class_=AsyncSession,
+    expire_on_commit=False  # prevents lazy-load errors after commit
+)
 
-    Returns:
-        asyncpg.pool.Pool: A connection pool instance
+Base = declarative_base()
 
-    Raises:
-        Exception: If DATABASE_URL is not set or connection fails
-    """
-    return await asyncpg.create_pool(
-        DATABASE_URL,
-        min_size=1,
-        max_size=10,
-        statement_cache_size=0
-    )
+# FastAPI dependency — inject this into your routes
+async def get_db():
+    async with AsyncSessionLocal() as session:
+        yield session

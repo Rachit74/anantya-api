@@ -1,22 +1,17 @@
 """
-Member Routes Module
-
-This module defines the API endpoints for member management in the
-Anantya Foundation volunteer system.
-
-Endpoints:
-    POST /onboard - Register a new member
-    GET /members - Retrieve all registered members
+Member Routes Module - SQLAlchemy ORM version
 """
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, status, Request, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from datetime import date
 import uuid
-import asyncpg
 
 from app.models.schemas import OnboardingPost
-from typing import List
-
+from app.models.models import Member                    # your new models.py
+from app.db import get_db                            # your new db.py
 from app.services.id_generator import generate_unique_id
 from app.services.email_verifier import check_valid_email
 from app.jobs.sheets_job import insert_member_record
@@ -28,120 +23,86 @@ router = APIRouter()
 
 @router.post('/onboard')
 @limiter.limit("3/minute")
-async def onboard(member: OnboardingPost, background_tasks: BackgroundTasks, request: Request):
-    """
-    Register a new member (volunteer) with the Anantya Foundation.
-
-    This endpoint:
-    1. Validates and processes the onboarding data
-    2. Checks for duplicate email addresses
-    3. Generates a unique member ID based on location
-    4. Stores the member record in the database
-    5. Returns the new member's UUID and member ID
-
-    Args:
-        member: OnboardingPost model containing all member details
-        background_tasks: FastAPI background tasks (for email sending)
-        request: Request object containing app state with DB pool
-
-    Returns:
-        dict: Contains 'uuid' and 'member_id' of the newly created member
-
-    Raises:
-        HTTPException: 400 if email already exists in the database
-    """
-
+async def onboard(
+    member: OnboardingPost,
+    background_tasks: BackgroundTasks,
+    request: Request,
+    db: AsyncSession = Depends(get_db)          # ← replaces pool.acquire()
+):
     member_data = member.model_dump()
     member_data['email'] = member_data['email'].lower()
-    member_data['uuid'] = str(uuid.uuid4())
-    member_data['joining_date'] = date.today()
     member_data['government_id_picture'] = str(member_data['government_id_picture'])
     member_data['member_picture'] = str(member_data['member_picture'])
 
-    # verfiy valid email
-    is_valid_email = check_valid_email(member_data["email"])
-
-    if not is_valid_email:
+    # Validate email
+    if not check_valid_email(member_data['email']):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid Email")
 
-    # Check for duplicate email
-    email_check_query = "SELECT email FROM members WHERE email = $1;"
-
-    try:
-        async with request.app.state.pool.acquire() as connection:
-            existing = await connection.fetchval(email_check_query, member_data['email'])
-            if existing:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Email Already exists",
-                )
-            
-            member_af_id = generate_unique_id(city=member_data['location'])
-            member_data['member_id'] = member_af_id
-
-            query = """
-            INSERT INTO members (
-                uuid, email, fullname, age, gender, location,
-                phone_number, profession, place_of_profession,
-                department, volunteered_before, acknowledgement,
-                can_attend_events, member_id, joining_date,
-                government_id_picture, member_picture, dob
-            )
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
-            RETURNING uuid;
-            """
-
-            result = await connection.fetchrow(
-                query,
-                member_data["uuid"],                    # $1
-                member_data["email"],                    # $2
-                member_data["fullname"],                 # $3
-                member_data["age"],                      # $4
-                member_data["gender"],                    # $5
-                member_data["location"],                  # $6
-                member_data["phone_number"],              # $7
-                member_data["profession"],                # $8
-                member_data["place_of_profession"],       # $9
-                member_data["department"],                 # $10
-                member_data["volunteered_before"],        # $11
-                member_data["acknowledgement"],           # $12
-                member_data["can_attend_events"],         # $13 (boolean)
-                member_data["member_id"],                  # $14 (string)
-                member_data["joining_date"],               # $15 (date)
-                member_data["government_id_picture"],      # $16 (HttpUrl/string)
-                member_data["member_picture"],              # $17 (HttpUrl/string)
-                member_data["dob"],
-            )
-
-    except asyncpg.UniqueViolationError:
+    # Check for duplicate email using ORM
+    result = await db.execute(
+        select(Member).where(Member.email == member_data['email'])
+    )
+    if result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email Already exists",
+            detail="Email already exists"
         )
 
+    # Generate IDs
+    member_uuid = str(uuid.uuid4())
+    member_id = generate_unique_id(city=member_data['location'])
+
+    # Build ORM object — maps directly to your Member model columns
+    new_member = Member(
+        uuid=member_uuid,
+        member_id=member_id,
+        email=member_data['email'],
+        fullname=member_data['fullname'],
+        age=member_data['age'],
+        gender=member_data['gender'],
+        dob=member_data['dob'],
+        location=member_data['location'],
+        phone_number=member_data['phone_number'],
+        profession=member_data['profession'],
+        place_of_profession=member_data['place_of_profession'],
+        department=member_data['department'],           # list → ARRAY(String) 
+        volunteered_before=member_data['volunteered_before'],
+        acknowledgement=member_data['acknowledgement'],
+        can_attend_events=member_data['can_attend_events'],
+        government_id_picture=member_data['government_id_picture'],
+        member_picture=member_data['member_picture'],
+        joining_date=date.today(),
+    )
+
+    try:
+        db.add(new_member)
+        await db.commit()
+        await db.refresh(new_member)        # loads DB-generated values back
+    except IntegrityError:
+        await db.rollback()                 # always rollback on failure
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already exists"
+        )
+
+    # Pass member_data to background task (sheets sync)
+    member_data['uuid'] = str(member_uuid)
+    member_data['member_id'] = member_id
+    member_data['joining_date'] = date.today()
     background_tasks.add_task(insert_member_record, member_data)
-    # returning uuid, member_id (af specific) and fullname for nodemailer on frotnend
-    return {"uuid": result["uuid"], "member_id": member_data["member_id"], "fullname": member_data["fullname"]}
+
+    return {
+        "uuid": str(new_member.uuid),
+        "member_id": new_member.member_id,
+        "fullname": new_member.fullname
+    }
 
 
 @router.get('/members')
-async def get_members(request: Request, token_payload: dict = Depends(verify_token)):
-    """
-    Retrieve all registered members.
-
-    Returns a list of all members currently in the database,
-    including their UUID, email, name, location, member ID,
-    and email status.
-
-    Args:
-        request: Request object containing app state with DB pool
-
-    Returns:
-        List[MemberResponse]: List of member records
-    """
-    query = "SELECT * FROM members;"
-
-    async with request.app.state.pool.acquire() as connection:
-        rows = await connection.fetch(query)
-
-    return [dict(row) for row in rows]
+async def get_members(
+    db: AsyncSession = Depends(get_db),
+    token_payload: dict = Depends(verify_token)
+):
+    result = await db.execute(select(Member))
+    members = result.scalars().all()
+    return members

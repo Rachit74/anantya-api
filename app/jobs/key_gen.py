@@ -9,10 +9,14 @@ Admin Key Rotation Job
 
 from fastapi_mail import ConnectionConfig, FastMail, MessageSchema, MessageType
 from dotenv import load_dotenv
+from sqlalchemy import select, update
 import os
 import secrets
 import string
+
 from app.models.schemas import AdminSignup
+from app.models.models import Member, Key
+from app.db import AsyncSessionLocal
 
 load_dotenv()
 
@@ -29,21 +33,11 @@ conf = ConnectionConfig(
 
 
 def gen_key(length: int = 16) -> str:
-    """
-    Generate a cryptographically secure alphanumeric signup key.
-    Combines uppercase letters, lowercase letters, and digits.
-
-    Returns:
-        A random alphanumeric string of the given length.
-    """
     charset = string.ascii_uppercase + string.ascii_lowercase + string.digits
     return ''.join(secrets.choice(charset) for _ in range(length))
 
 
 async def send_mail(admins: list[dict], new_key: str, new_admin_data: AdminSignup) -> None:
-    """
-    Send the new admin signup key to every admin via email.
-    """
     fm = FastMail(conf)
 
     for admin in admins:
@@ -60,7 +54,6 @@ async def send_mail(admins: list[dict], new_key: str, new_admin_data: AdminSignu
                 generated automatically. Please use the key below for the next admin registration:
                 </p>
 
-                <!-- New key — shown first -->
                 <p style="
                 background: #f4f4f4;
                 padding: 12px 16px;
@@ -70,7 +63,6 @@ async def send_mail(admins: list[dict], new_key: str, new_admin_data: AdminSignu
                 letter-spacing: 1px;
                 ">{new_key}</p>
 
-                <!-- Who used the previous key -->
                 <p style="font-size: 14px; color: #333;">
                 <strong>Used by:</strong>
                 <span style="font-family: monospace;">{new_admin_data.member_id.upper()}</span>
@@ -111,29 +103,34 @@ async def send_mail(admins: list[dict], new_key: str, new_admin_data: AdminSignu
         await fm.send_message(message)
 
 
-async def rotate_admin_signup_key(pool, new_admin_data: AdminSignup) -> None:
+async def rotate_admin_signup_key(new_admin_data: AdminSignup) -> None:
     """
-    Full rotation pipeline. Called as a FastAPI background task
-    immediately after a successful admin signup.
-
-    Steps:
-        1. Pull all admin emails from the DB
-        2. Generate a new signup key
-        3. Write the new key to the DB
-        4. Release connection, then email every admin the new key
+    Full rotation pipeline. Called as a FastAPI background task.
+    Opens its own session — safe to use in background tasks since
+    the request session may already be closed by the time this runs.
     """
-    async with pool.acquire() as conn:
-        rows = await conn.fetch("SELECT email, fullname FROM members WHERE is_admin = TRUE;")
-        admins = [dict(row) for row in rows]
+    async with AsyncSessionLocal() as db:
+        # Fetch all admin emails + names
+        result = await db.execute(
+            select(Member.email, Member.fullname).where(Member.is_admin == True)
+        )
+        admins = [{"email": row.email, "fullname": row.fullname} for row in result.all()]
 
         if not admins:
             return
 
         new_key = gen_key()
-        await conn.execute(
-            "UPDATE keys SET key_value = $1 WHERE key_name = 'ADMIN_SIGNUP_KEY';",
-            new_key
-        )
 
-    # Connection released before sending emails
+        # Update the key in DB
+        key_result = await db.execute(
+            select(Key).where(Key.key_name == 'ADMIN_SIGNUP_KEY')
+        )
+        key_row = key_result.scalar_one_or_none()
+
+        if key_row:
+            key_row.key_value = new_key
+
+        await db.commit()
+
+    # Session closed before sending emails — same pattern as your original
     await send_mail(admins, new_key, new_admin_data=new_admin_data)

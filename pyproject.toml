@@ -22,4 +22,5 @@ dependencies = [
     "sendgrid>=6.12.5",
     "sib-api-v3-sdk>=7.6.0",
     "slowapi>=0.1.9",
+    "sqlalchemy>=2.0.48",
 ]
