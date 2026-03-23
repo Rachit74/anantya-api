@@ -71,7 +71,6 @@ async def admin_signup(
             admin_id=str(uuid.uuid4()),
             member_id=admin_data.member_id,
             password_hash=password_hash,
-            created_at=datetime.now(timezone.utc)
         )
 
         db.add(new_admin)
@@ -79,7 +78,8 @@ async def admin_signup(
         await db.refresh(new_admin)
 
         # Rotate key only after successful commit
-        background_tasks.add_task(rotate_admin_signup_key, db, admin_data)
+        background_tasks.add_task(rotate_admin_signup_key, admin_data)
+
 
         return {"detail": "Admin signup successful", "admin_id": str(new_admin.admin_id)}
 

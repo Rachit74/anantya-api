@@ -44,6 +44,5 @@ class Admin(Base):
 class Key(Base):
     __tablename__ = "keys"
 
-    id = Column(Integer, primary_key=True)
-    key_name = Column(Text, unique=True, nullable=False)
-    key_value = Column(Text, nullable=False)
+    key_name = Column(String(100), primary_key=True)
+    key_value = Column(String(150), nullable=False)
