@@ -13,6 +13,7 @@ from sqlalchemy import select, update
 import os
 import secrets
 import string
+import bcrypt
 
 from app.models.schemas import AdminSignup
 from app.models.models import Member, Key
@@ -128,7 +129,7 @@ async def rotate_admin_signup_key(new_admin_data: AdminSignup) -> None:
         key_row = key_result.scalar_one_or_none()
 
         if key_row:
-            key_row.key_value = new_key
+            key_row.key_value = bcrypt.hashpw(new_key.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
         await db.commit()
 

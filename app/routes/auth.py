@@ -36,7 +36,7 @@ async def admin_signup(
         if not key_row:
             raise HTTPException(status_code=500, detail="Signup key not configured")
 
-        if admin_data.admin_signup_key != key_row.key_value:
+        if not bcrypt.checkpw(admin_data.admin_signup_key.encode('utf-8'), key_row.key_value.encode('utf-8')):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Invalid Signup Key')
 
         # Check member exists
