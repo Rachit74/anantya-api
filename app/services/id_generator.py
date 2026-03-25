@@ -4,14 +4,15 @@ Unique ID Generator Service
 This module handles the generation of unique member IDs for the
 Anantya Foundation volunteer system.
 
-ID Format: AF-CITYCODE-XXX
-Example: AF-DEL-001, AF-MUM-015
+ID Format: AF-DDMMYY-XXX
+Example: AF-240326-001, AF-240326-015
 
-City counters are stored in Firestore to persist across deployments.
+Date-based counters are stored in Firestore to persist across deployments.
 """
 
 import json
 import os
+from datetime import datetime
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -43,40 +44,24 @@ if not firebase_admin._apps:
 
 db = firestore.client()
 
-COUNTERS_COLLECTION = "city_counters"
-
-# ----------------------------
-# Local Data Files
-# ----------------------------
-
-DATA_DIR = BASE_DIR / "app/data"
-CITY_ALIASES_PATH = DATA_DIR / "city_aliases.json"
-
-with CITY_ALIASES_PATH.open() as f:
-    city_aliases_map = json.load(f)
+COUNTERS_COLLECTION = "date_counters"
 
 # ----------------------------
 # ID Generator
 # ----------------------------
 
-def generate_unique_id(city: str):
+def generate_unique_id():
     """
     Generate a unique Anantya Foundation member ID.
 
-    Args:
-        city: Location string like "Delhi, Connaught Place"
-
     Returns:
-        str: Unique member ID in format "AF-CITYCODE-XXX"
+        str: Unique member ID in format "AF-DDMMYY-XXX"
+              e.g. "AF-250326-001"
     """
 
-    if not city or not isinstance(city, str):
-        raise ValueError("Invalid city input")
+    date_code = datetime.now().strftime("%d%m%y")   # e.g. "250326"
 
-    city_name = city.split(",")[0].strip().lower()
-    city_code = city_aliases_map.get(city_name, "XXX")
-
-    doc_ref = db.collection(COUNTERS_COLLECTION).document(city_code)
+    doc_ref = db.collection(COUNTERS_COLLECTION).document(date_code)
 
     @firestore.transactional
     def increment_counter(transaction, doc_ref):
@@ -94,6 +79,4 @@ def generate_unique_id(city: str):
     transaction = db.transaction()
     counter = increment_counter(transaction, doc_ref)
 
-    new_id = f"AF-{city_code}-{counter:03d}"
-
-    return new_id
+    return f"AF-{date_code}-{counter:03d}"

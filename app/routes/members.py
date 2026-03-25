@@ -50,7 +50,7 @@ async def onboard(
 
     # Generate IDs
     member_uuid = str(uuid.uuid4())
-    member_id = generate_unique_id(city=member_data['location'])
+    member_id = generate_unique_id()
 
     # Build ORM object — maps directly to your Member model columns
     new_member = Member(
