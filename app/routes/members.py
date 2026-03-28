@@ -15,6 +15,7 @@ from app.db import get_db                            # your new db.py
 from app.services.id_generator import generate_unique_id
 from app.services.email_verifier import check_valid_email
 from app.jobs.sheets_job import insert_member_record
+from app.jobs.onboarding_email import send_onboarding_email
 from app.jwt_utils import verify_token
 from app.limiter import limiter
 
@@ -90,6 +91,7 @@ async def onboard(
     member_data['member_id'] = member_id
     member_data['joining_date'] = date.today()
     background_tasks.add_task(insert_member_record, member_data)
+    background_tasks.add_task(send_onboarding_email, member_data)
 
     return {
         "uuid": str(new_member.uuid),
