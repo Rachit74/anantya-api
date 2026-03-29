@@ -108,3 +108,34 @@ async def get_members(
     result = await db.execute(select(Member))
     members = result.scalars().all()
     return members
+
+
+@router.delete('/delete/member/{member_uuid}')
+async def delete_member(
+    member_uuid: str,
+    db: AsyncSession = Depends(get_db),
+    token_payload: dict = Depends(verify_token)
+):
+    """
+    Delete a member by UUID. Only accessible by authenticated admins.
+    """
+    # Find the member by UUID
+    result = await db.execute(
+        select(Member).where(Member.uuid == member_uuid)
+    )
+    member = result.scalar_one_or_none()
+
+    if not member:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Member not found"
+        )
+
+    # Delete the member
+    await db.delete(member)
+    await db.commit()
+
+    return {
+        "detail": "Member deleted successfully",
+        "uuid": member_uuid
+    }
