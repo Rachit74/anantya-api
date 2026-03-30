@@ -5,7 +5,7 @@ A FastAPI-based backend for managing volunteer onboarding and administration for
 ## Features
 
 - **Member/Volunteer Onboarding** - Registration with comprehensive profile data
-- **Member ID Generation** - Unique IDs using city codes (e.g., `AF-DEL-001`)
+- **Member ID Generation** - Unique IDs using Joining Date in the dd/mm/yy format (e.g., `AF-300426-001`)
 - **Admin Authentication** - Secure signup/login with rotating signup keys
 - **Email Verification** - MX record-based email validation
 - **Google Sheets Integration** - Automatic sync of member records
